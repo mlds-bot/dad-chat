@@ -1,127 +1,114 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dad Chat Control</title>
-
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
-<style>
-body{
-font-family:Arial;
-background:#111;
-color:white;
-max-width:500px;
-margin:auto;
-padding:20px;
-}
-
-input,textarea{
-width:100%;
-padding:10px;
-margin-top:5px;
-margin-bottom:15px;
-font-size:16px;
-}
-
-button{
-width:100%;
-padding:15px;
-font-size:18px;
-background:#2ecc71;
-border:none;
-color:white;
-border-radius:6px;
-}
-
-#responses{
-background:#222;
-padding:10px;
-height:200px;
-overflow:auto;
-border-radius:6px;
-}
-</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dad Chat Control</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body{font-family:Arial;background:#111;color:#fff;max-width:520px;margin:auto;padding:18px;}
+    input,textarea{width:100%;padding:10px;margin:6px 0 14px 0;font-size:16px;border-radius:6px;border:1px solid #333;background:#1b1b1b;color:#fff;}
+    button{width:100%;padding:14px;font-size:18px;background:#2ecc71;border:none;color:white;border-radius:8px;}
+    .row{display:flex;gap:10px}
+    .row > div{flex:1}
+    #status{padding:10px;border-radius:8px;background:#222;margin:10px 0 14px 0;white-space:pre-wrap}
+    #responses{background:#222;padding:10px;height:220px;overflow:auto;border-radius:8px;white-space:pre-wrap}
+    small{color:#bbb}
+  </style>
 </head>
-
 <body>
 
 <h2>Dad Chat</h2>
 
+<div id="status">Status: Loading…</div>
+
 <label>Title</label>
-<input id="title">
+<input id="title" placeholder="DAD CHAT">
 
 <label>Message</label>
-<textarea id="message"></textarea>
+<textarea id="message" rows="3" placeholder="Type message…"></textarea>
 
-<label>Button 1</label>
-<input id="b1">
-
-<label>Button 2</label>
-<input id="b2">
-
-<label>Button 3</label>
-<input id="b3">
+<div class="row">
+  <div>
+    <label>Button 1</label>
+    <input id="b1" placeholder="On it">
+  </div>
+  <div>
+    <label>Button 2</label>
+    <input id="b2" placeholder="In 5 mins">
+  </div>
+  <div>
+    <label>Button 3</label>
+    <input id="b3" placeholder="Can't right now">
+  </div>
+</div>
 
 <button onclick="send()">SEND</button>
+<small>Publishes to: dadchat/room1/title, message, buttons</small>
 
 <h3>Responses</h3>
 <div id="responses"></div>
 
 <script>
+  const STATUS = (t) => document.getElementById("status").textContent = t;
 
-const client = mqtt.connect(
-"wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt",
-{
-username: "MLDS_CHAT2",
-password: "Tonka123"
-});
+  // Your HiveMQ WebSocket Secure endpoint from the screenshot:
+  const brokerUrl = "wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt";
 
-const room = "dadchat/room1";
+  const room = "dadchat/room1";
 
-client.on("connect", ()=>{
+  // IMPORTANT: Put your HiveMQ username/password here
+  const options = {
+    username: "MLDS_CHAT2",
+    password: "Tonka123",
+    protocolVersion: 4,
+    clean: true,
+    reconnectPeriod: 2000,
+    connectTimeout: 8000,
+    clientId: "dadchat-web-" + Math.random().toString(16).slice(2)
+  };
 
-console.log("MQTT connected");
+  STATUS("Status: Connecting to HiveMQ…");
 
-client.subscribe(room+"/response");
+  const client = mqtt.connect(brokerUrl, options);
 
-});
+  client.on("connect", () => {
+    STATUS("Status: ✅ Connected\nSubscribed: " + room + "/response");
+    client.subscribe(room + "/response", { qos: 1 });
+  });
 
-client.on("message",(topic,msg)=>{
+  client.on("reconnect", () => STATUS("Status: Reconnecting…"));
+  client.on("close", () => STATUS("Status: Disconnected (socket closed)"));
+  client.on("offline", () => STATUS("Status: Offline"));
+  client.on("error", (err) => STATUS("Status: ❌ Error\n" + err.message));
 
-if(topic === room+"/response")
-{
-let log = document.getElementById("responses");
+  client.on("message", (topic, msg) => {
+    if (topic === room + "/response") {
+      const log = document.getElementById("responses");
+      const div = document.createElement("div");
+      div.textContent = msg.toString();
+      log.prepend(div);
+    }
+  });
 
-let txt = msg.toString();
+  function send(){
+    if (!client.connected) {
+      STATUS("Status: ❌ Not connected — can’t send yet.");
+      return;
+    }
 
-let div = document.createElement("div");
+    const title = document.getElementById("title").value || "";
+    const msg   = document.getElementById("message").value || "";
 
-div.innerText = txt;
+    const b1 = document.getElementById("b1").value || "";
+    const b2 = document.getElementById("b2").value || "";
+    const b3 = document.getElementById("b3").value || "";
 
-log.prepend(div);
-}
+    client.publish(room + "/title", title,   { qos: 1 });
+    client.publish(room + "/message", msg,   { qos: 1 });
+    client.publish(room + "/buttons", `${b1}|${b2}|${b3}`, { qos: 1 });
 
-});
-
-function send(){
-
-let title = document.getElementById("title").value;
-let msg = document.getElementById("message").value;
-
-let b1 = document.getElementById("b1").value;
-let b2 = document.getElementById("b2").value;
-let b3 = document.getElementById("b3").value;
-
-client.publish(room+"/title",title);
-client.publish(room+"/message",msg);
-
-let buttons = b1+"|"+b2+"|"+b3;
-
-client.publish(room+"/buttons",buttons);
-
-}
-
+    STATUS("Status: ✅ Sent update");
+  }
 </script>
 
 </body>
