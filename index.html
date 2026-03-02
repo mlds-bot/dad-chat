@@ -7,121 +7,25 @@
 
 <style>
 :root { color-scheme: dark; }
-
-body{
-  font-family:Arial, sans-serif;
-  background:#111;
-  color:#fff;
-  max-width:560px;
-  margin:auto;
-  padding:18px;
-}
-
-h2{ margin:6px 0 10px; }
-
-label{ display:block; margin-top:10px; color:#ddd; }
-
-input,textarea{
-  width:100%;
-  padding:10px;
-  margin-top:6px;
-  font-size:16px;
-  border-radius:8px;
-  border:1px solid #333;
-  background:#1b1b1b;
-  color:#fff;
-}
-
-textarea{ resize:vertical; min-height:80px; }
-
-button{
-  width:100%;
-  padding:14px;
-  font-size:18px;
-  border:none;
-  border-radius:10px;
-  color:#fff;
-  background:#2ecc71;
-  margin-top:12px;
-}
-
-button.secondary{ background:#444; }
-
-.row{ display:flex; gap:10px; }
-.row>div{ flex:1; }
-
-.controls{
-  display:flex;
-  gap:10px;
-  margin-top:10px;
-  flex-wrap:wrap;
-}
-
-.controls button{
-  margin-top:0;
-  flex:1 1 160px;
-}
-
-#status{
-  padding:10px;
-  border-radius:10px;
-  background:#222;
-  margin:10px 0 14px 0;
-  white-space:pre-wrap;
-  font-size:14px;
-}
-
-#lockScreen{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.92);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:18px;
-  z-index:9999;
-}
-
-#lockBox{
-  width:100%;
-  max-width:420px;
-  background:#151515;
-  border:1px solid #2a2a2a;
-  border-radius:14px;
-  padding:18px;
-}
-
-table{
-  width:100%;
-  border-collapse:collapse;
-  background:#1a1a1a;
-  border:1px solid #2a2a2a;
-  border-radius:10px;
-  overflow:hidden;
-}
-
-th,td{
-  padding:10px;
-  border-bottom:1px solid #2a2a2a;
-  vertical-align:top;
-}
-
-th{
-  text-align:left;
-  background:#222;
-  color:#ddd;
-}
-
-tr:last-child td{ border-bottom:none; }
-
-.dot{
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  display:inline-block;
-  background:#666;
-  margin-right:6px;
-}
+body{font-family:Arial, sans-serif;background:#111;color:#fff;max-width:560px;margin:auto;padding:18px;}
+h2{margin:6px 0 10px;}
+label{display:block;margin-top:10px;color:#ddd;}
+input,textarea{width:100%;padding:10px;margin-top:6px;font-size:16px;border-radius:8px;border:1px solid #333;background:#1b1b1b;color:#fff;}
+textarea{resize:vertical;min-height:80px;}
+button{width:100%;padding:14px;font-size:18px;border:none;border-radius:10px;color:#fff;background:#2ecc71;margin-top:12px;}
+button.secondary{background:#444;}
+.row{display:flex;gap:10px;}
+.row>div{flex:1;}
+.controls{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;}
+.controls button{margin-top:0;flex:1 1 160px;}
+#status{padding:10px;border-radius:10px;background:#222;margin:10px 0 14px 0;white-space:pre-wrap;font-size:14px;}
+#lockScreen{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:18px;z-index:9999;}
+#lockBox{width:100%;max-width:420px;background:#151515;border:1px solid #2a2a2a;border-radius:14px;padding:18px;}
+table{width:100%;border-collapse:collapse;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;overflow:hidden;}
+th,td{padding:10px;border-bottom:1px solid #2a2a2a;vertical-align:top;}
+th{text-align:left;background:#222;color:#ddd;}
+tr:last-child td{border-bottom:none;}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#666;margin-right:6px;}
 
 #requestBanner{
   display:none;
@@ -132,40 +36,15 @@ tr:last-child td{ border-bottom:none; }
   margin: 10px 0 12px 0;
   box-shadow: 0 10px 30px rgba(0,0,0,.25);
 }
-
-#requestBanner strong{
-  display:block;
-  font-size:16px;
-  margin-bottom:4px;
-}
-
-#requestBanner .meta{
-  font-size:13px;
-  opacity:0.9;
-}
-
-#requestBanner .bannerRow{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-
-#requestBanner button{
-  width:auto;
-  margin:0;
-  padding:10px 12px;
-  font-size:14px;
-  background:#111;
-  color:#fff;
-  border-radius:10px;
-}
+#requestBanner strong{display:block;font-size:16px;margin-bottom:4px;}
+#requestBanner .meta{font-size:13px;opacity:0.9;}
+#requestBanner .bannerRow{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+#requestBanner button{width:auto;margin:0;padding:10px 12px;font-size:14px;background:#111;color:#fff;border-radius:10px;}
 </style>
 </head>
 
 <body>
 
-<!-- Lock screen -->
 <div id="lockScreen">
   <div id="lockBox">
     <h2>Dad Chat Locked</h2>
@@ -177,18 +56,16 @@ tr:last-child td{ border-bottom:none; }
 
 <h2>Dad Chat</h2>
 
-<!-- Request banner -->
 <div id="requestBanner">
   <div class="bannerRow">
     <div>
       <strong>⚠ Dad requested a message</strong>
       <div class="meta" id="requestTimeText">Time: —</div>
     </div>
-    <button onclick="clearRequestBanner()">Dismiss</button>
+    <button onclick="dismissRequest()">Dismiss</button>
   </div>
 </div>
 
-<!-- Status -->
 <div id="status">
 Status: Locked
 <div>
@@ -197,12 +74,11 @@ Status: Locked
 </div>
 </div>
 
-<!-- Controls -->
 <div class="controls">
   <button class="secondary" onclick="requestNotify()">Enable Notifications</button>
   <button class="secondary" onclick="clearResponses()">Clear Responses</button>
   <button class="secondary" onclick="clearFields()">Clear Fields</button>
-  <button class="secondary" onclick="clearRequestBanner()">Clear Request Banner</button>
+  <button class="secondary" onclick="dismissRequest()">Clear Request Banner</button>
 </div>
 
 <label>Title</label>
@@ -212,18 +88,9 @@ Status: Locked
 <textarea id="message"></textarea>
 
 <div class="row">
-  <div>
-    <label>Button 1</label>
-    <input id="b1">
-  </div>
-  <div>
-    <label>Button 2</label>
-    <input id="b2">
-  </div>
-  <div>
-    <label>Button 3</label>
-    <input id="b3">
-  </div>
+  <div><label>Button 1</label><input id="b1"></div>
+  <div><label>Button 2</label><input id="b2"></div>
+  <div><label>Button 3</label><input id="b3"></div>
 </div>
 
 <button onclick="send()">SEND</button>
@@ -231,10 +98,7 @@ Status: Locked
 <h3 style="margin-top:14px;">Responses</h3>
 <table>
   <thead>
-    <tr>
-      <th style="width:65%">Message</th>
-      <th style="width:35%">Response</th>
-    </tr>
+    <tr><th style="width:65%">Message</th><th style="width:35%">Response</th></tr>
   </thead>
   <tbody id="responsesBody"></tbody>
 </table>
@@ -245,7 +109,7 @@ Status: Locked
 // CHANGE THIS:
 const PAGE_PASSWORD = "Toronto123";
 
-// ✅ YOUR broker URL (you pasted this):
+// Your confirmed broker URL:
 const brokerUrl =
 "wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt";
 
@@ -258,7 +122,7 @@ const topicMessage  = room + "/message";
 const topicTitle    = room + "/title";
 const topicButtons  = room + "/buttons";
 
-// ✅ PUT YOUR HiveMQ WEB SOCKET creds here:
+// PUT YOUR WORKING HiveMQ WebSocket creds here:
 const options = {
   username: "MLDS_CHAT2",
   password: "Tonka123",
@@ -272,9 +136,9 @@ const options = {
 /* ================= UI HELPERS ================= */
 
 function STATUS(t){
-  const s = document.getElementById("status");
-  const badge = s.querySelector("div");
-  s.textContent = t;
+  const s=document.getElementById("status");
+  const badge=s.querySelector("div");
+  s.textContent=t;
   s.appendChild(badge);
 }
 
@@ -289,28 +153,25 @@ function escapeHtml(s){
 
 function formatTime(ts){
   try{
-    const d = new Date(ts);
-    return d.toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
-  }catch{
-    return "";
-  }
+    const d=new Date(ts);
+    return d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+  }catch{ return ""; }
 }
 
 /* ================= DEVICE STATUS ================= */
 
 function setDeviceStatus(on){
-  const dot = document.getElementById("devDot");
-  const txt = document.getElementById("devText");
-  dot.style.background = on ? "#2ecc71" : "#e74c3c";
-  txt.textContent = "Device: " + (on ? "Online" : "Offline");
+  const dot=document.getElementById("devDot");
+  const txt=document.getElementById("devText");
+  dot.style.background=on?"#2ecc71":"#e74c3c";
+  txt.textContent="Device: "+(on?"Online":"Offline");
 }
 
 /* ================= PASSWORD ================= */
 
 function unlock(){
-  if(document.getElementById("pw").value !== PAGE_PASSWORD){
-    alert("Wrong password");
-    return;
+  if(document.getElementById("pw").value!==PAGE_PASSWORD){
+    alert("Wrong password"); return;
   }
   sessionStorage.setItem("dadchat_unlocked","1");
   document.getElementById("lockScreen").style.display="none";
@@ -318,7 +179,7 @@ function unlock(){
   startMqtt();
 }
 
-if(sessionStorage.getItem("dadchat_unlocked") === "1"){
+if(sessionStorage.getItem("dadchat_unlocked")==="1"){
   document.getElementById("lockScreen").style.display="none";
   startMqtt();
 }
@@ -333,90 +194,100 @@ async function requestNotify(){
   await Notification.requestPermission();
 }
 
-function notify(title, body){
+function notify(title,body){
   try{
-    if(Notification.permission === "granted"){
-      new Notification(title, { body });
+    if(Notification.permission==="granted"){
+      new Notification(title,{body});
     }
   }catch(e){}
 }
 
 /* ================= REQUEST BANNER (PERSISTENT) ================= */
 
-const REQ_KEY = "dadchat_last_request_v3";
+const REQ_KEY="dadchat_request_state_v1";
 
-function showRequestBanner(ts){
-  const banner = document.getElementById("requestBanner");
-  document.getElementById("requestTimeText").textContent = "Time: " + formatTime(ts);
-  banner.style.display = "block";
+/**
+ * Stores: { ts:number, raw:string }
+ * ts = epochMs from device if provided, otherwise Date.now() when received
+ */
+function saveRequestState(ts, raw){
+  try{ localStorage.setItem(REQ_KEY, JSON.stringify({ ts, raw })); }catch(e){}
 }
 
-function persistRequest(ts){
-  try{
-    localStorage.setItem(REQ_KEY, JSON.stringify({ ts }));
-  }catch(e){}
-}
-
-function loadPersistedRequest(){
+function loadRequestState(){
   try{
     const raw = localStorage.getItem(REQ_KEY);
-    if(!raw) return;
-    const obj = JSON.parse(raw);
-    if(obj && obj.ts) showRequestBanner(obj.ts);
-  }catch(e){}
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){
+    return null;
+  }
 }
 
-function clearLocalRequestBanner(){
+function showRequestBanner(ts){
+  document.getElementById("requestTimeText").textContent = "Time: " + formatTime(ts);
+  document.getElementById("requestBanner").style.display="block";
+}
+
+function hideRequestBanner(){
+  document.getElementById("requestBanner").style.display="none";
+}
+
+function applySavedRequestBanner(){
+  const st = loadRequestState();
+  if(st && st.ts){
+    showRequestBanner(st.ts);
+  }
+}
+
+/**
+ * Clear locally AND clear retained request on broker (if connected).
+ */
+function dismissRequest(){
   try{ localStorage.removeItem(REQ_KEY); }catch(e){}
-  document.getElementById("requestBanner").style.display = "none";
-}
+  hideRequestBanner();
 
-function clearRequestBanner(){
-  clearLocalRequestBanner();
-  // Also clear retained request on broker (so it won't reappear next login)
   if(client && client.connected){
+    // Clear retained request so it doesn't come back next login
     client.publish(topicRequest, "", { qos: 1, retain: true });
   }
 }
 
 /* ================= RESPONSE STORAGE (PERSISTENT) ================= */
 
-const STORE_KEY = "dadchat_responses_v1";
-const MAX_ROWS  = 120;
+const STORE_KEY="dadchat_responses_v1";
+const MAX_ROWS=120;
 
 function loadResponses(){
   try{
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw=localStorage.getItem(STORE_KEY);
     if(!raw) return;
-    const arr = JSON.parse(raw);
+    const arr=JSON.parse(raw);
     if(!Array.isArray(arr)) return;
-
-    for(let i = arr.length - 1; i >= 0; i--){
-      addRow(arr[i].q, arr[i].a, false);
-    }
+    for(let i=arr.length-1;i>=0;i--) addRow(arr[i].q,arr[i].a,false);
   }catch(e){}
 }
 
 function saveResponse(q,a){
   try{
-    const raw = localStorage.getItem(STORE_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    const next = Array.isArray(arr) ? arr : [];
-    next.push({ q, a, ts: Date.now() });
-    while(next.length > MAX_ROWS) next.shift();
-    localStorage.setItem(STORE_KEY, JSON.stringify(next));
+    const raw=localStorage.getItem(STORE_KEY);
+    const arr=raw?JSON.parse(raw):[];
+    const next=Array.isArray(arr)?arr:[];
+    next.push({q,a,ts:Date.now()});
+    while(next.length>MAX_ROWS) next.shift();
+    localStorage.setItem(STORE_KEY,JSON.stringify(next));
   }catch(e){}
 }
 
 function clearResponses(){
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
-  document.getElementById("responsesBody").innerHTML = "";
+  document.getElementById("responsesBody").innerHTML="";
 }
 
 function addRow(q,a,persist=true){
-  const tbody = document.getElementById("responsesBody");
-  const tr = document.createElement("tr");
-  tr.innerHTML = `<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
+  const tbody=document.getElementById("responsesBody");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
   tbody.prepend(tr);
   if(persist) saveResponse(q,a);
 }
@@ -424,32 +295,30 @@ function addRow(q,a,persist=true){
 /* ================= CLEAR FIELDS ================= */
 
 function clearFields(){
-  document.getElementById("message").value = "";
-  document.getElementById("b1").value = "";
-  document.getElementById("b2").value = "";
-  document.getElementById("b3").value = "";
+  document.getElementById("message").value="";
+  document.getElementById("b1").value="";
+  document.getElementById("b2").value="";
+  document.getElementById("b3").value="";
 }
 
 /* ================= MQTT ================= */
 
-let client = null;
+let client=null;
 
 function startMqtt(){
-  // Default title every load unless you change it
-  document.getElementById("title").value = "Dad Chat";
+  document.getElementById("title").value="Dad Chat";
 
   loadResponses();
-  loadPersistedRequest();
+  applySavedRequestBanner();
 
-  if(typeof mqtt === "undefined"){
+  if(typeof mqtt==="undefined"){
     STATUS("ERROR: mqtt library did not load.");
     return;
   }
 
   STATUS("Connecting to HiveMQ…");
-
   try{
-    client = mqtt.connect(brokerUrl, options);
+    client=mqtt.connect(brokerUrl, options);
   }catch(e){
     STATUS("Connect exception: " + e);
     return;
@@ -457,11 +326,9 @@ function startMqtt(){
 
   client.on("connect", ()=>{
     STATUS("Connected ✅");
-
-    client.subscribe(topicResponse, { qos: 1 });
-    client.subscribe(topicOnline,   { qos: 1 });
-    client.subscribe(topicRequest,  { qos: 1 }); // retained request will come through here
-    client.subscribe(topicMessage,  { qos: 1 });
+    client.subscribe(topicResponse,{qos:1});
+    client.subscribe(topicOnline,{qos:1});
+    client.subscribe(topicRequest,{qos:1}); // IMPORTANT: will receive retained request too
   });
 
   client.on("reconnect", ()=>STATUS("Reconnecting…"));
@@ -478,40 +345,36 @@ function startMqtt(){
     }
 
     if(topic === topicRequest){
-      // empty retained = cleared
+      // If request topic is cleared (retained empty), hide banner + clear local storage
       if(raw.trim().length === 0){
-        clearLocalRequestBanner();
+        try{ localStorage.removeItem(REQ_KEY); }catch(e){}
+        hideRequestBanner();
         return;
       }
 
-      // Prefer FNK epochMs if present, else show "now"
+      // Timestamp rules:
+      // - If JSON includes epochMs, use it
+      // - Else use Date.now() (time we received it)
       let ts = Date.now();
       try{
         const j = JSON.parse(raw);
         if(j && j.epochMs && Number(j.epochMs) > 0) ts = Number(j.epochMs);
       }catch(e){}
 
-      persistRequest(ts);
+      saveRequestState(ts, raw);
       showRequestBanner(ts);
       notify("Dad Chat", "Dad requested a message (" + formatTime(ts) + ")");
       return;
     }
 
-    if(topic === topicMessage){
-      // new message sent = clear banner
-      clearRequestBanner();
-      return;
-    }
-
     if(topic === topicResponse){
-      let q = raw, a = "";
+      let q=raw, a="";
       try{
-        const j = JSON.parse(raw);
-        q = (j.q ?? raw);
-        a = (j.a ?? "");
+        const j=JSON.parse(raw);
+        q=(j.q ?? raw);
+        a=(j.a ?? "");
       }catch(e){}
-
-      addRow(q, a, true);
+      addRow(q,a,true);
       notify("Dad Chat Response", a ? a : "New response received");
       return;
     }
@@ -526,19 +389,19 @@ function send(){
     return;
   }
 
-  const title = document.getElementById("title").value || "";
-  const msg   = document.getElementById("message").value || "";
-  const b1    = document.getElementById("b1").value || "";
-  const b2    = document.getElementById("b2").value || "";
-  const b3    = document.getElementById("b3").value || "";
+  const title=document.getElementById("title").value || "";
+  const msg=document.getElementById("message").value || "";
+  const b1=document.getElementById("b1").value || "";
+  const b2=document.getElementById("b2").value || "";
+  const b3=document.getElementById("b3").value || "";
 
   client.publish(topicTitle,   title,               { qos: 1 });
   client.publish(topicMessage, msg,                 { qos: 1 });
   client.publish(topicButtons, `${b1}|${b2}|${b3}`, { qos: 1 });
 
-  // Clear retained request (so it doesn't show next login)
+  // Clear retained request + clear local banner
   client.publish(topicRequest, "", { qos: 1, retain: true });
-  clearLocalRequestBanner();
+  dismissRequest(); // clears local + hides banner (and also clears retained again harmlessly)
 
   STATUS("Sent ✅");
 }
