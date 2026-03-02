@@ -75,7 +75,6 @@ Status: Locked
 </div>
 
 <div class="controls">
-  <button class="secondary" onclick="requestNotify()">Enable Notifications</button>
   <button class="secondary" onclick="clearResponses()">Clear Responses</button>
   <button class="secondary" onclick="clearFields()">Clear Fields</button>
   <button class="secondary" onclick="dismissRequest()">Clear Request Banner</button>
@@ -104,22 +103,19 @@ Status: Locked
 </table>
 
 <script>
-/* ================= SETTINGS ================= */
 const PAGE_PASSWORD = "Toronto123";
 
 const brokerUrl =
 "wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt";
 
 const room = "dadchat/room1";
-
 const topicTitle    = room + "/title";
 const topicMessage  = room + "/message";
 const topicButtons  = room + "/buttons";
-const topicResponse = room + "/response";
 const topicOnline   = room + "/online";
 const topicRequest  = room + "/request";
+const topicHistory  = room + "/history";   // NEW retained snapshot
 
-// PUT YOUR WORKING creds here:
 const options = {
   username: "MLDS_CHAT2",
   password: "Tonka123",
@@ -130,7 +126,6 @@ const options = {
   clientId: "dadchat-web-" + Math.random().toString(16).slice(2)
 };
 
-/* ================= UI HELPERS ================= */
 function STATUS(t){
   const s=document.getElementById("status");
   const badge=s.querySelector("div");
@@ -139,11 +134,8 @@ function STATUS(t){
 }
 function escapeHtml(s){
   return String(s)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
 function formatTime(ts){
   try{
@@ -158,7 +150,7 @@ function setDeviceStatus(on){
   txt.textContent="Device: "+(on?"Online":"Offline");
 }
 
-/* ================= PASSWORD ================= */
+/* lock */
 function unlock(){
   if(document.getElementById("pw").value!==PAGE_PASSWORD){
     alert("Wrong password"); return;
@@ -173,92 +165,58 @@ if(sessionStorage.getItem("dadchat_unlocked")==="1"){
   startMqtt();
 }
 
-/* ================= NOTIFICATIONS ================= */
-async function requestNotify(){
-  if(!("Notification" in window)){
-    alert("Notifications unsupported in this browser");
-    return;
-  }
-  await Notification.requestPermission();
-}
-function notify(title,body){
-  try{
-    if(Notification.permission==="granted"){
-      new Notification(title,{body});
-    }
-  }catch(e){}
-}
-
-/* ================= REQUEST BANNER (PERSISTENT) ================= */
-const REQ_KEY="dadchat_request_state_v2";
-
-function saveRequestState(ts, raw){
-  try{ localStorage.setItem(REQ_KEY, JSON.stringify({ts, raw})); }catch(e){}
-}
-function loadRequestState(){
-  try{
-    const raw = localStorage.getItem(REQ_KEY);
-    if(!raw) return null;
-    return JSON.parse(raw);
-  }catch(e){ return null; }
-}
+/* request banner */
+const REQ_KEY="dadchat_request_state_v1";
 function showRequestBanner(ts){
   document.getElementById("requestTimeText").textContent = "Time: " + formatTime(ts);
   document.getElementById("requestBanner").style.display="block";
 }
-function hideRequestBanner(){
-  document.getElementById("requestBanner").style.display="none";
-}
-function applySavedRequestBanner(){
-  const st = loadRequestState();
-  if(st && st.ts) showRequestBanner(st.ts);
-}
-
-// Clear locally and clear retained on broker (only when YOU choose)
+function hideRequestBanner(){ document.getElementById("requestBanner").style.display="none"; }
+function saveRequest(ts){ try{ localStorage.setItem(REQ_KEY, JSON.stringify({ts})); }catch(e){} }
+function loadRequest(){ try{ const r=localStorage.getItem(REQ_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
+function applySavedRequest(){ const st=loadRequest(); if(st && st.ts) showRequestBanner(st.ts); }
 function dismissRequest(){
-  try{ localStorage.removeItem(REQ_KEY); }catch(e){}
+  try{ localStorage.removeItem(REQ_KEY);}catch(e){}
   hideRequestBanner();
   if(client && client.connected){
-    client.publish(topicRequest, "", {qos:1, retain:true}); // clear retained request
+    client.publish(topicRequest,"",{qos:1,retain:true});
   }
 }
 
-/* ================= RESPONSES (PERSISTENT) ================= */
-const STORE_KEY="dadchat_responses_v1";
-const MAX_ROWS=120;
+/* history table */
+const STORE_KEY="dadchat_history_cache_v1";
 
-function loadResponses(){
-  try{
-    const raw=localStorage.getItem(STORE_KEY);
-    if(!raw) return;
-    const arr=JSON.parse(raw);
-    if(!Array.isArray(arr)) return;
-    for(let i=arr.length-1;i>=0;i--) addRow(arr[i].q,arr[i].a,false);
-  }catch(e){}
-}
-function saveResponse(q,a){
-  try{
-    const raw=localStorage.getItem(STORE_KEY);
-    const arr=raw?JSON.parse(raw):[];
-    const next=Array.isArray(arr)?arr:[];
-    next.push({q,a,ts:Date.now()});
-    while(next.length>MAX_ROWS) next.shift();
-    localStorage.setItem(STORE_KEY,JSON.stringify(next));
-  }catch(e){}
-}
 function clearResponses(){
-  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   document.getElementById("responsesBody").innerHTML="";
-}
-function addRow(q,a,persist=true){
-  const tbody=document.getElementById("responsesBody");
-  const tr=document.createElement("tr");
-  tr.innerHTML=`<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
-  tbody.prepend(tr);
-  if(persist) saveResponse(q,a);
+  try{ localStorage.removeItem(STORE_KEY);}catch(e){}
 }
 
-/* ================= CLEAR FIELDS ================= */
+function renderHistory(arr){
+  const tbody=document.getElementById("responsesBody");
+  tbody.innerHTML="";
+  for(const item of arr){
+    const q = item.q ?? "";
+    const a = item.a ?? "";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function cacheHistory(arr){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(arr)); }catch(e){}
+}
+
+function loadCachedHistory(){
+  try{
+    const raw=localStorage.getItem(STORE_KEY);
+    if(!raw) return null;
+    const arr=JSON.parse(raw);
+    return Array.isArray(arr)?arr:null;
+  }catch(e){ return null; }
+}
+
+/* clear fields */
 function clearFields(){
   document.getElementById("message").value="";
   document.getElementById("b1").value="";
@@ -266,28 +224,28 @@ function clearFields(){
   document.getElementById("b3").value="";
 }
 
-/* ================= MQTT ================= */
+/* mqtt */
 let client=null;
 
 function startMqtt(){
   document.getElementById("title").value="Dad Chat";
 
-  loadResponses();
-  applySavedRequestBanner();
+  // show cached history immediately (then replace when retained arrives)
+  const cached = loadCachedHistory();
+  if(cached) renderHistory(cached);
+
+  applySavedRequest();
 
   STATUS("Connecting to HiveMQ…");
   client=mqtt.connect(brokerUrl, options);
 
   client.on("connect", ()=>{
     STATUS("Connected ✅");
-    client.subscribe(topicResponse,{qos:1});
     client.subscribe(topicOnline,{qos:1});
-    client.subscribe(topicRequest,{qos:1}); // this is what brings in RETAINED requests
+    client.subscribe(topicRequest,{qos:1});
+    client.subscribe(topicHistory,{qos:1}); // <-- THIS is the big fix
   });
 
-  client.on("reconnect", ()=>STATUS("Reconnecting…"));
-  client.on("offline", ()=>STATUS("Offline (browser)"));
-  client.on("close", ()=>STATUS("Disconnected"));
   client.on("error", (err)=>STATUS("Error: " + (err?.message || err)));
 
   client.on("message",(topic,msg)=>{
@@ -299,41 +257,36 @@ function startMqtt(){
     }
 
     if(topic===topicRequest){
-      // Retained cleared = hide
       if(raw.trim().length===0){
-        try{ localStorage.removeItem(REQ_KEY); }catch(e){}
+        try{ localStorage.removeItem(REQ_KEY);}catch(e){}
         hideRequestBanner();
         return;
       }
-
-      // Use FNK epochMs if present
-      let ts = Date.now();
+      let ts=Date.now();
       try{
-        const j = JSON.parse(raw);
-        if(j && j.epochMs && Number(j.epochMs) > 0) ts = Number(j.epochMs);
+        const j=JSON.parse(raw);
+        if(j && j.epochMs && Number(j.epochMs)>0) ts=Number(j.epochMs);
       }catch(e){}
-
-      saveRequestState(ts, raw);
+      saveRequest(ts);
       showRequestBanner(ts);
-      notify("Dad Chat", "Dad requested a message (" + formatTime(ts) + ")");
       return;
     }
 
-    if(topic===topicResponse){
-      let q=raw, a="";
+    if(topic===topicHistory){
+      // retained snapshot arrives here even if you were offline when replies happened
       try{
-        const j=JSON.parse(raw);
-        q=(j.q ?? raw);
-        a=(j.a ?? "");
+        const arr = JSON.parse(raw);
+        if(Array.isArray(arr)){
+          cacheHistory(arr);
+          renderHistory(arr);
+        }
       }catch(e){}
-      addRow(q,a,true);
-      notify("Dad Chat Response", a ? a : "New response received");
       return;
     }
   });
 }
 
-/* ================= SEND ================= */
+/* send */
 function send(){
   if(!client || !client.connected){
     STATUS("Not connected");
@@ -350,9 +303,9 @@ function send(){
   client.publish(topicMessage, msg,                 {qos:1});
   client.publish(topicButtons, `${b1}|${b2}|${b3}`, {qos:1});
 
-  // When you SEND, clear request on broker + locally
+  // clear request
   client.publish(topicRequest, "", {qos:1, retain:true});
-  try{ localStorage.removeItem(REQ_KEY); }catch(e){}
+  try{ localStorage.removeItem(REQ_KEY);}catch(e){}
   hideRequestBanner();
 
   STATUS("Sent ✅");
