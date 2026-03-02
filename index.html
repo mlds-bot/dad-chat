@@ -105,24 +105,21 @@ Status: Locked
 
 <script>
 /* ================= SETTINGS ================= */
-
-// CHANGE THIS:
 const PAGE_PASSWORD = "Toronto123";
 
-// Your confirmed broker URL:
 const brokerUrl =
 "wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt";
 
-// Topics
 const room = "dadchat/room1";
+
+const topicTitle    = room + "/title";
+const topicMessage  = room + "/message";
+const topicButtons  = room + "/buttons";
 const topicResponse = room + "/response";
 const topicOnline   = room + "/online";
 const topicRequest  = room + "/request";
-const topicMessage  = room + "/message";
-const topicTitle    = room + "/title";
-const topicButtons  = room + "/buttons";
 
-// PUT YOUR WORKING HiveMQ WebSocket creds here:
+// PUT YOUR WORKING creds here:
 const options = {
   username: "MLDS_CHAT2",
   password: "Tonka123",
@@ -134,14 +131,12 @@ const options = {
 };
 
 /* ================= UI HELPERS ================= */
-
 function STATUS(t){
   const s=document.getElementById("status");
   const badge=s.querySelector("div");
   s.textContent=t;
   s.appendChild(badge);
 }
-
 function escapeHtml(s){
   return String(s)
     .replaceAll("&","&amp;")
@@ -150,16 +145,12 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
 }
-
 function formatTime(ts){
   try{
     const d=new Date(ts);
     return d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
   }catch{ return ""; }
 }
-
-/* ================= DEVICE STATUS ================= */
-
 function setDeviceStatus(on){
   const dot=document.getElementById("devDot");
   const txt=document.getElementById("devText");
@@ -168,7 +159,6 @@ function setDeviceStatus(on){
 }
 
 /* ================= PASSWORD ================= */
-
 function unlock(){
   if(document.getElementById("pw").value!==PAGE_PASSWORD){
     alert("Wrong password"); return;
@@ -178,14 +168,12 @@ function unlock(){
   STATUS("Status: Connecting…");
   startMqtt();
 }
-
 if(sessionStorage.getItem("dadchat_unlocked")==="1"){
   document.getElementById("lockScreen").style.display="none";
   startMqtt();
 }
 
 /* ================= NOTIFICATIONS ================= */
-
 async function requestNotify(){
   if(!("Notification" in window)){
     alert("Notifications unsupported in this browser");
@@ -193,7 +181,6 @@ async function requestNotify(){
   }
   await Notification.requestPermission();
 }
-
 function notify(title,body){
   try{
     if(Notification.permission==="granted"){
@@ -203,58 +190,40 @@ function notify(title,body){
 }
 
 /* ================= REQUEST BANNER (PERSISTENT) ================= */
+const REQ_KEY="dadchat_request_state_v2";
 
-const REQ_KEY="dadchat_request_state_v1";
-
-/**
- * Stores: { ts:number, raw:string }
- * ts = epochMs from device if provided, otherwise Date.now() when received
- */
 function saveRequestState(ts, raw){
-  try{ localStorage.setItem(REQ_KEY, JSON.stringify({ ts, raw })); }catch(e){}
+  try{ localStorage.setItem(REQ_KEY, JSON.stringify({ts, raw})); }catch(e){}
 }
-
 function loadRequestState(){
   try{
     const raw = localStorage.getItem(REQ_KEY);
     if(!raw) return null;
     return JSON.parse(raw);
-  }catch(e){
-    return null;
-  }
+  }catch(e){ return null; }
 }
-
 function showRequestBanner(ts){
   document.getElementById("requestTimeText").textContent = "Time: " + formatTime(ts);
   document.getElementById("requestBanner").style.display="block";
 }
-
 function hideRequestBanner(){
   document.getElementById("requestBanner").style.display="none";
 }
-
 function applySavedRequestBanner(){
   const st = loadRequestState();
-  if(st && st.ts){
-    showRequestBanner(st.ts);
-  }
+  if(st && st.ts) showRequestBanner(st.ts);
 }
 
-/**
- * Clear locally AND clear retained request on broker (if connected).
- */
+// Clear locally and clear retained on broker (only when YOU choose)
 function dismissRequest(){
   try{ localStorage.removeItem(REQ_KEY); }catch(e){}
   hideRequestBanner();
-
   if(client && client.connected){
-    // Clear retained request so it doesn't come back next login
-    client.publish(topicRequest, "", { qos: 1, retain: true });
+    client.publish(topicRequest, "", {qos:1, retain:true}); // clear retained request
   }
 }
 
-/* ================= RESPONSE STORAGE (PERSISTENT) ================= */
-
+/* ================= RESPONSES (PERSISTENT) ================= */
 const STORE_KEY="dadchat_responses_v1";
 const MAX_ROWS=120;
 
@@ -267,7 +236,6 @@ function loadResponses(){
     for(let i=arr.length-1;i>=0;i--) addRow(arr[i].q,arr[i].a,false);
   }catch(e){}
 }
-
 function saveResponse(q,a){
   try{
     const raw=localStorage.getItem(STORE_KEY);
@@ -278,12 +246,10 @@ function saveResponse(q,a){
     localStorage.setItem(STORE_KEY,JSON.stringify(next));
   }catch(e){}
 }
-
 function clearResponses(){
   try{ localStorage.removeItem(STORE_KEY); }catch(e){}
   document.getElementById("responsesBody").innerHTML="";
 }
-
 function addRow(q,a,persist=true){
   const tbody=document.getElementById("responsesBody");
   const tr=document.createElement("tr");
@@ -293,7 +259,6 @@ function addRow(q,a,persist=true){
 }
 
 /* ================= CLEAR FIELDS ================= */
-
 function clearFields(){
   document.getElementById("message").value="";
   document.getElementById("b1").value="";
@@ -302,7 +267,6 @@ function clearFields(){
 }
 
 /* ================= MQTT ================= */
-
 let client=null;
 
 function startMqtt(){
@@ -311,24 +275,14 @@ function startMqtt(){
   loadResponses();
   applySavedRequestBanner();
 
-  if(typeof mqtt==="undefined"){
-    STATUS("ERROR: mqtt library did not load.");
-    return;
-  }
-
   STATUS("Connecting to HiveMQ…");
-  try{
-    client=mqtt.connect(brokerUrl, options);
-  }catch(e){
-    STATUS("Connect exception: " + e);
-    return;
-  }
+  client=mqtt.connect(brokerUrl, options);
 
   client.on("connect", ()=>{
     STATUS("Connected ✅");
     client.subscribe(topicResponse,{qos:1});
     client.subscribe(topicOnline,{qos:1});
-    client.subscribe(topicRequest,{qos:1}); // IMPORTANT: will receive retained request too
+    client.subscribe(topicRequest,{qos:1}); // this is what brings in RETAINED requests
   });
 
   client.on("reconnect", ()=>STATUS("Reconnecting…"));
@@ -336,25 +290,23 @@ function startMqtt(){
   client.on("close", ()=>STATUS("Disconnected"));
   client.on("error", (err)=>STATUS("Error: " + (err?.message || err)));
 
-  client.on("message", (topic, msg)=>{
+  client.on("message",(topic,msg)=>{
     const raw = msg.toString();
 
-    if(topic === topicOnline){
-      setDeviceStatus(raw.trim().toLowerCase() === "online");
+    if(topic===topicOnline){
+      setDeviceStatus(raw.trim().toLowerCase()==="online");
       return;
     }
 
-    if(topic === topicRequest){
-      // If request topic is cleared (retained empty), hide banner + clear local storage
-      if(raw.trim().length === 0){
+    if(topic===topicRequest){
+      // Retained cleared = hide
+      if(raw.trim().length===0){
         try{ localStorage.removeItem(REQ_KEY); }catch(e){}
         hideRequestBanner();
         return;
       }
 
-      // Timestamp rules:
-      // - If JSON includes epochMs, use it
-      // - Else use Date.now() (time we received it)
+      // Use FNK epochMs if present
       let ts = Date.now();
       try{
         const j = JSON.parse(raw);
@@ -367,7 +319,7 @@ function startMqtt(){
       return;
     }
 
-    if(topic === topicResponse){
+    if(topic===topicResponse){
       let q=raw, a="";
       try{
         const j=JSON.parse(raw);
@@ -382,7 +334,6 @@ function startMqtt(){
 }
 
 /* ================= SEND ================= */
-
 function send(){
   if(!client || !client.connected){
     STATUS("Not connected");
@@ -395,13 +346,14 @@ function send(){
   const b2=document.getElementById("b2").value || "";
   const b3=document.getElementById("b3").value || "";
 
-  client.publish(topicTitle,   title,               { qos: 1 });
-  client.publish(topicMessage, msg,                 { qos: 1 });
-  client.publish(topicButtons, `${b1}|${b2}|${b3}`, { qos: 1 });
+  client.publish(topicTitle,   title,               {qos:1});
+  client.publish(topicMessage, msg,                 {qos:1});
+  client.publish(topicButtons, `${b1}|${b2}|${b3}`, {qos:1});
 
-  // Clear retained request + clear local banner
-  client.publish(topicRequest, "", { qos: 1, retain: true });
-  dismissRequest(); // clears local + hides banner (and also clears retained again harmlessly)
+  // When you SEND, clear request on broker + locally
+  client.publish(topicRequest, "", {qos:1, retain:true});
+  try{ localStorage.removeItem(REQ_KEY); }catch(e){}
+  hideRequestBanner();
 
   STATUS("Sent ✅");
 }
