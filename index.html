@@ -5,27 +5,81 @@
   <title>Dad Chat Control</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body{font-family:Arial;background:#111;color:#fff;max-width:520px;margin:auto;padding:18px;}
-    input,textarea{width:100%;padding:10px;margin:6px 0 14px 0;font-size:16px;border-radius:6px;border:1px solid #333;background:#1b1b1b;color:#fff;}
-    button{width:100%;padding:14px;font-size:18px;background:#2ecc71;border:none;color:white;border-radius:8px;}
-    .row{display:flex;gap:10px}
-    .row > div{flex:1}
-    #status{padding:10px;border-radius:8px;background:#222;margin:10px 0 14px 0;white-space:pre-wrap}
-    #responses{background:#222;padding:10px;height:220px;overflow:auto;border-radius:8px;white-space:pre-wrap}
-    small{color:#bbb}
+    :root { color-scheme: dark; }
+    body { font-family: Arial, sans-serif; background:#111; color:#fff; max-width: 560px; margin: 0 auto; padding: 18px; }
+    h2 { margin: 6px 0 10px; }
+    label { display:block; margin-top: 10px; color:#ddd; }
+    input, textarea {
+      width:100%; padding:10px; margin-top:6px;
+      font-size:16px; border-radius:8px; border:1px solid #333;
+      background:#1b1b1b; color:#fff;
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    button {
+      width:100%; padding:14px; font-size:18px; border:none;
+      border-radius:10px; color:#fff; background:#2ecc71; margin-top: 12px;
+    }
+    button.secondary { background:#444; }
+    .row { display:flex; gap:10px; }
+    .row > div { flex:1; }
+    #status {
+      padding:10px; border-radius:10px; background:#222;
+      margin: 10px 0 14px 0; white-space: pre-wrap; font-size: 14px;
+    }
+    #lockScreen {
+      position: fixed; inset:0; background: rgba(0,0,0,.92);
+      display:flex; align-items:center; justify-content:center; padding: 18px;
+    }
+    #lockBox {
+      width:100%; max-width:420px; background:#151515; border:1px solid #2a2a2a;
+      border-radius:14px; padding:18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.55);
+    }
+    #lockBox p { color:#bbb; margin-top: 6px; }
+    #responsesWrap { margin-top: 12px; }
+    table {
+      width:100%; border-collapse: collapse; background:#1a1a1a;
+      border:1px solid #2a2a2a; border-radius: 10px; overflow:hidden;
+    }
+    th, td { padding:10px; border-bottom:1px solid #2a2a2a; vertical-align: top; }
+    th { text-align:left; background:#222; color:#ddd; position: sticky; top: 0; }
+    tr:last-child td { border-bottom:none; }
+    .tiny { font-size: 12px; color:#aaa; margin-top: 8px; }
+    .pill { display:inline-block; padding:4px 8px; border-radius: 999px; background:#2a2a2a; font-size: 12px; color:#ddd; }
+    .controls { display:flex; gap:10px; margin-top: 10px; }
+    .controls button { margin-top:0; }
   </style>
 </head>
+
 <body>
 
-<h2>Dad Chat</h2>
+<!-- Password Gate -->
+<div id="lockScreen">
+  <div id="lockBox">
+    <h2>Dad Chat Locked</h2>
+    <p>Enter the password to access controls.</p>
+    <label>Password</label>
+    <input id="pw" type="password" placeholder="Password">
+    <button onclick="unlock()">Unlock</button>
+    <p class="tiny">
+      Note: This blocks casual access. For true security on a public site, use Cloudflare Access or a backend.
+    </p>
+  </div>
+</div>
 
-<div id="status">Status: Loading…</div>
+<h2>Dad Chat</h2>
+<div id="status">Status: Locked</div>
+
+<div class="controls">
+  <button class="secondary" onclick="requestNotify()">Enable Notifications</button>
+  <button class="secondary" onclick="clearResponses()">Clear Responses</button>
+</div>
 
 <label>Title</label>
 <input id="title" placeholder="DAD CHAT">
 
 <label>Message</label>
-<textarea id="message" rows="3" placeholder="Type message…"></textarea>
+<textarea id="message" placeholder="Type message…"></textarea>
 
 <div class="row">
   <div>
@@ -43,20 +97,34 @@
 </div>
 
 <button onclick="send()">SEND</button>
-<small>Publishes to: dadchat/room1/title, message, buttons</small>
+<div class="tiny">
+  Publishes to <span class="pill">dadchat/room1/title</span> <span class="pill">message</span> <span class="pill">buttons</span>
+</div>
 
-<h3>Responses</h3>
-<div id="responses"></div>
+<div id="responsesWrap">
+  <h3 style="margin:14px 0 8px;">Responses</h3>
+  <table>
+    <thead>
+      <tr><th style="width:65%;">Message</th><th style="width:35%;">Response</th></tr>
+    </thead>
+    <tbody id="responsesBody"></tbody>
+  </table>
+</div>
 
 <script>
-  const STATUS = (t) => document.getElementById("status").textContent = t;
+  // ======= YOUR SETTINGS =======
+  // 1) Change this password to whatever you want.
+  //    (Reminder: if site is public, this is not “true” security — it’s a lock screen.)
+  const PAGE_PASSWORD = "Toronto123";
 
-  // Your HiveMQ WebSocket Secure endpoint from the screenshot:
+  // 2) HiveMQ WSS endpoint from your screenshot:
   const brokerUrl = "wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt";
 
+  // 3) Topics
   const room = "dadchat/room1";
+  const topicResponse = room + "/response";
 
-  // IMPORTANT: Put your HiveMQ username/password here
+  // 4) Put your HiveMQ user/pass here (recommend: a restricted user just for this page)
   const options = {
     username: "MLDS_CHAT2",
     password: "Tonka123",
@@ -67,31 +135,121 @@
     clientId: "dadchat-web-" + Math.random().toString(16).slice(2)
   };
 
-  STATUS("Status: Connecting to HiveMQ…");
+  // ======= UI helpers =======
+  const STATUS = (t) => document.getElementById("status").textContent = t;
 
-  const client = mqtt.connect(brokerUrl, options);
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&","&amp;").replaceAll("<","&lt;")
+      .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
 
-  client.on("connect", () => {
-    STATUS("Status: ✅ Connected\nSubscribed: " + room + "/response");
-    client.subscribe(room + "/response", { qos: 1 });
-  });
-
-  client.on("reconnect", () => STATUS("Status: Reconnecting…"));
-  client.on("close", () => STATUS("Status: Disconnected (socket closed)"));
-  client.on("offline", () => STATUS("Status: Offline"));
-  client.on("error", (err) => STATUS("Status: ❌ Error\n" + err.message));
-
-  client.on("message", (topic, msg) => {
-    if (topic === room + "/response") {
-      const log = document.getElementById("responses");
-      const div = document.createElement("div");
-      div.textContent = msg.toString();
-      log.prepend(div);
+  // ======= Password gate =======
+  function unlock() {
+    const pw = document.getElementById("pw").value || "";
+    if (pw !== PAGE_PASSWORD) {
+      alert("Wrong password");
+      return;
     }
-  });
+    sessionStorage.setItem("dadchat_unlocked", "1");
+    document.getElementById("lockScreen").style.display = "none";
+    STATUS("Status: Unlocked (connecting…)");
 
-  function send(){
-    if (!client.connected) {
+    // start mqtt after unlock
+    startMqtt();
+  }
+
+  // auto-unlock if this tab already unlocked
+  if (sessionStorage.getItem("dadchat_unlocked") === "1") {
+    document.getElementById("lockScreen").style.display = "none";
+    STATUS("Status: Unlocked (connecting…)");
+    startMqtt();
+  }
+
+  // ======= Notifications (while page is open) =======
+  async function requestNotify() {
+    if (!("Notification" in window)) {
+      alert("Notifications not supported in this browser.");
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm === "granted") {
+      alert("Notifications enabled. You’ll get an alert when a response arrives (while this page is open).");
+    } else {
+      alert("Notifications not enabled.");
+    }
+  }
+
+  function notify(title, body) {
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body });
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // ======= Responses table =======
+  function addResponseRow(q, a) {
+    const tbody = document.getElementById("responsesBody");
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
+    tbody.prepend(tr);
+  }
+
+  function clearResponses() {
+    document.getElementById("responsesBody").innerHTML = "";
+  }
+
+  // ======= MQTT =======
+  let client = null;
+
+  function startMqtt() {
+    if (client) return; // already started
+    STATUS("Status: Connecting to HiveMQ…");
+
+    client = mqtt.connect(brokerUrl, options);
+
+    client.on("connect", () => {
+      STATUS("Status: ✅ Connected\nSubscribed: " + topicResponse);
+      client.subscribe(topicResponse, { qos: 1 });
+    });
+
+    client.on("reconnect", () => STATUS("Status: Reconnecting…"));
+    client.on("close", () => STATUS("Status: Disconnected (socket closed)"));
+    client.on("offline", () => STATUS("Status: Offline"));
+    client.on("error", (err) => STATUS("Status: ❌ Error\n" + (err?.message || err)));
+
+    client.on("message", (topic, msg) => {
+      if (topic !== topicResponse) return;
+
+      const raw = msg.toString();
+
+      // Your FNK publishes JSON like {"q":"...","a":"...","device":"...","ts":...}
+      let q = raw;
+      let a = "";
+      try {
+        const obj = JSON.parse(raw);
+        q = obj.q ?? raw;
+        a = obj.a ?? "";
+      } catch (e) {
+        // If it's not JSON, just show raw in message column
+        q = raw;
+        a = "";
+      }
+
+      addResponseRow(q, a);
+
+      // notification (while page is open)
+      notify("Dad Chat Response", a ? `Response: ${a}` : "New response received");
+    });
+  }
+
+  // ======= Send controls =======
+  function send() {
+    if (!client || !client.connected) {
       STATUS("Status: ❌ Not connected — can’t send yet.");
       return;
     }
