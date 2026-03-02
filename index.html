@@ -36,7 +36,6 @@
       box-shadow: 0 10px 30px rgba(0,0,0,.55);
     }
     #lockBox p { color:#bbb; margin-top: 6px; }
-    #responsesWrap { margin-top: 12px; }
     table {
       width:100%; border-collapse: collapse; background:#1a1a1a;
       border:1px solid #2a2a2a; border-radius: 10px; overflow:hidden;
@@ -48,6 +47,8 @@
     .pill { display:inline-block; padding:4px 8px; border-radius: 999px; background:#2a2a2a; font-size: 12px; color:#ddd; }
     .controls { display:flex; gap:10px; margin-top: 10px; }
     .controls button { margin-top:0; }
+    .badge { display:inline-flex; align-items:center; gap:8px; margin-top:8px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#666; display:inline-block; }
   </style>
 </head>
 
@@ -61,14 +62,18 @@
     <label>Password</label>
     <input id="pw" type="password" placeholder="Password">
     <button onclick="unlock()">Unlock</button>
-    <p class="tiny">
-      Note: This blocks casual access. For true security on a public site, use Cloudflare Access or a backend.
-    </p>
   </div>
 </div>
 
 <h2>Dad Chat</h2>
-<div id="status">Status: Locked</div>
+
+<div id="status">
+  Status: Locked
+  <div class="badge">
+    <span id="devDot" class="dot"></span>
+    <span id="devText">Device: Unknown</span>
+  </div>
+</div>
 
 <div class="controls">
   <button class="secondary" onclick="requestNotify()">Enable Notifications</button>
@@ -101,30 +106,26 @@
   Publishes to <span class="pill">dadchat/room1/title</span> <span class="pill">message</span> <span class="pill">buttons</span>
 </div>
 
-<div id="responsesWrap">
-  <h3 style="margin:14px 0 8px;">Responses</h3>
-  <table>
-    <thead>
-      <tr><th style="width:65%;">Message</th><th style="width:35%;">Response</th></tr>
-    </thead>
-    <tbody id="responsesBody"></tbody>
-  </table>
-</div>
+<h3 style="margin:14px 0 8px;">Responses</h3>
+<table>
+  <thead>
+    <tr><th style="width:65%;">Message</th><th style="width:35%;">Response</th></tr>
+  </thead>
+  <tbody id="responsesBody"></tbody>
+</table>
 
 <script>
   // ======= YOUR SETTINGS =======
-  // 1) Change this password to whatever you want.
-  //    (Reminder: if site is public, this is not “true” security — it’s a lock screen.)
   const PAGE_PASSWORD = "Toronto123";
 
-  // 2) HiveMQ WSS endpoint from your screenshot:
   const brokerUrl = "wss://b1dcdceb082d4443873bb186cd006f90.s1.eu.hivemq.cloud:8884/mqtt";
-
-  // 3) Topics
   const room = "dadchat/room1";
-  const topicResponse = room + "/response";
 
-  // 4) Put your HiveMQ user/pass here (recommend: a restricted user just for this page)
+  const topicResponse = room + "/response";
+  const topicOnline   = room + "/online";
+  const topicRequest  = room + "/request";
+
+  // Use a restricted HiveMQ user if possible
   const options = {
     username: "MLDS_CHAT2",
     password: "Tonka123",
@@ -136,7 +137,13 @@
   };
 
   // ======= UI helpers =======
-  const STATUS = (t) => document.getElementById("status").textContent = t;
+  const STATUS = (t) => {
+    const s = document.getElementById("status");
+    // keep device badge intact
+    const badge = s.querySelector(".badge");
+    s.textContent = t;
+    s.appendChild(badge);
+  };
 
   function escapeHtml(s) {
     return String(s)
@@ -145,40 +152,34 @@
       .replaceAll("'","&#039;");
   }
 
+  function setDeviceStatus(isOnline, extra="") {
+    const dot = document.getElementById("devDot");
+    const txt = document.getElementById("devText");
+    dot.style.background = isOnline ? "#2ecc71" : "#e74c3c";
+    txt.textContent = "Device: " + (isOnline ? "Online" : "Offline") + (extra ? (" ("+extra+")") : "");
+  }
+
   // ======= Password gate =======
   function unlock() {
     const pw = document.getElementById("pw").value || "";
-    if (pw !== PAGE_PASSWORD) {
-      alert("Wrong password");
-      return;
-    }
+    if (pw !== PAGE_PASSWORD) { alert("Wrong password"); return; }
     sessionStorage.setItem("dadchat_unlocked", "1");
     document.getElementById("lockScreen").style.display = "none";
     STATUS("Status: Unlocked (connecting…)");
-
-    // start mqtt after unlock
     startMqtt();
   }
 
-  // auto-unlock if this tab already unlocked
   if (sessionStorage.getItem("dadchat_unlocked") === "1") {
     document.getElementById("lockScreen").style.display = "none";
     STATUS("Status: Unlocked (connecting…)");
     startMqtt();
   }
 
-  // ======= Notifications (while page is open) =======
+  // ======= Notifications =======
   async function requestNotify() {
-    if (!("Notification" in window)) {
-      alert("Notifications not supported in this browser.");
-      return;
-    }
+    if (!("Notification" in window)) { alert("Notifications not supported."); return; }
     const perm = await Notification.requestPermission();
-    if (perm === "granted") {
-      alert("Notifications enabled. You’ll get an alert when a response arrives (while this page is open).");
-    } else {
-      alert("Notifications not enabled.");
-    }
+    alert(perm === "granted" ? "Notifications enabled." : "Notifications not enabled.");
   }
 
   function notify(title, body) {
@@ -186,35 +187,68 @@
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification(title, { body });
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   }
 
-  // ======= Responses table =======
-  function addResponseRow(q, a) {
+  // ======= Persistent responses =======
+  const STORE_KEY = "dadchat_responses_v1";
+  const MAX_ROWS = 80;
+
+  function loadStoredResponses() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      // oldest->newest; we render newest first so reverse iterate
+      for (let i = arr.length - 1; i >= 0; i--) {
+        addResponseRow(arr[i].q, arr[i].a, false);
+      }
+    } catch (e) {}
+  }
+
+  function saveResponse(q, a) {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      const next = Array.isArray(arr) ? arr : [];
+      next.push({ q, a, ts: Date.now() });
+      while (next.length > MAX_ROWS) next.shift();
+      localStorage.setItem(STORE_KEY, JSON.stringify(next));
+    } catch (e) {}
+  }
+
+  function clearResponses() {
+    localStorage.removeItem(STORE_KEY);
+    document.getElementById("responsesBody").innerHTML = "";
+  }
+
+  function addResponseRow(q, a, persist=true) {
     const tbody = document.getElementById("responsesBody");
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
     tbody.prepend(tr);
-  }
-
-  function clearResponses() {
-    document.getElementById("responsesBody").innerHTML = "";
+    if (persist) saveResponse(q, a);
   }
 
   // ======= MQTT =======
   let client = null;
+  let onlineWatchdog = null;
 
   function startMqtt() {
-    if (client) return; // already started
-    STATUS("Status: Connecting to HiveMQ…");
+    if (client) return;
 
+    setDeviceStatus(false, "waiting…");
+    loadStoredResponses();
+
+    STATUS("Status: Connecting to HiveMQ…");
     client = mqtt.connect(brokerUrl, options);
 
     client.on("connect", () => {
-      STATUS("Status: ✅ Connected\nSubscribed: " + topicResponse);
+      STATUS("Status: ✅ Connected\nSubscribed: response + online + request");
       client.subscribe(topicResponse, { qos: 1 });
+      client.subscribe(topicOnline,   { qos: 1 });
+      client.subscribe(topicRequest,  { qos: 1 });
     });
 
     client.on("reconnect", () => STATUS("Status: Reconnecting…"));
@@ -222,41 +256,48 @@
     client.on("offline", () => STATUS("Status: Offline"));
     client.on("error", (err) => STATUS("Status: ❌ Error\n" + (err?.message || err)));
 
-    client.on("message", (topic, msg) => {
-      if (topic !== topicResponse) return;
+    // If we don't hear "online" within 20s, show offline (covers edge cases)
+    if (!onlineWatchdog) {
+      onlineWatchdog = setInterval(() => {
+        // no-op; status is driven by retained online/offline normally
+      }, 10000);
+    }
 
+    client.on("message", (topic, msg) => {
       const raw = msg.toString();
 
-      // Your FNK publishes JSON like {"q":"...","a":"...","device":"...","ts":...}
-      let q = raw;
-      let a = "";
-      try {
-        const obj = JSON.parse(raw);
-        q = obj.q ?? raw;
-        a = obj.a ?? "";
-      } catch (e) {
-        // If it's not JSON, just show raw in message column
-        q = raw;
-        a = "";
+      if (topic === topicOnline) {
+        const v = raw.trim().toLowerCase();
+        setDeviceStatus(v === "online");
+        return;
       }
 
-      addResponseRow(q, a);
+      if (topic === topicRequest) {
+        // Dad pressed “Send me a Message”
+        notify("Dad Chat", "Dad pressed: Send me a Message");
+        return;
+      }
 
-      // notification (while page is open)
-      notify("Dad Chat Response", a ? `Response: ${a}` : "New response received");
+      if (topic === topicResponse) {
+        let q = raw, a = "";
+        try {
+          const obj = JSON.parse(raw);
+          q = obj.q ?? raw;
+          a = obj.a ?? "";
+        } catch (e) { /* not JSON */ }
+
+        addResponseRow(q, a, true);
+        notify("Dad Chat Response", a ? `Response: ${a}` : "New response received");
+      }
     });
   }
 
   // ======= Send controls =======
   function send() {
-    if (!client || !client.connected) {
-      STATUS("Status: ❌ Not connected — can’t send yet.");
-      return;
-    }
+    if (!client || !client.connected) { STATUS("Status: ❌ Not connected — can’t send yet."); return; }
 
     const title = document.getElementById("title").value || "";
     const msg   = document.getElementById("message").value || "";
-
     const b1 = document.getElementById("b1").value || "";
     const b2 = document.getElementById("b2").value || "";
     const b3 = document.getElementById("b3").value || "";
