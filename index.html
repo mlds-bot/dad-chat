@@ -75,9 +75,9 @@ Status: Locked
 </div>
 
 <div class="controls">
-  <button class="secondary" onclick="requestNotify()">Enable Notifications</button>
-  <button class="secondary" onclick="clearHistory()">Clear History (local)</button>
+  <button class="secondary" onclick="clearResponses()">Clear Responses</button>
   <button class="secondary" onclick="clearFields()">Clear Fields</button>
+  <button class="secondary" onclick="dismissRequest()">Clear Request Banner</button>
 </div>
 
 <label>Title</label>
@@ -94,7 +94,7 @@ Status: Locked
 
 <button onclick="send()">SEND</button>
 
-<h3 style="margin-top:14px;">History</h3>
+<h3 style="margin-top:14px;">Responses</h3>
 <table>
   <thead>
     <tr><th style="width:65%">Message</th><th style="width:35%">Response</th></tr>
@@ -114,7 +114,7 @@ const topicMessage  = room + "/message";
 const topicButtons  = room + "/buttons";
 const topicOnline   = room + "/online";
 const topicRequest  = room + "/request";
-const topicHistory  = room + "/history";
+const topicHistory  = room + "/history";   // NEW retained snapshot
 
 const options = {
   username: "MLDS_CHAT2",
@@ -126,32 +126,23 @@ const options = {
   clientId: "dadchat-web-" + Math.random().toString(16).slice(2)
 };
 
-const LOGIN_KEY = "dadchat_login_v1";
-const LOGIN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
 function STATUS(t){
   const s=document.getElementById("status");
   const badge=s.querySelector("div");
   s.textContent=t;
   s.appendChild(badge);
 }
-
 function escapeHtml(s){
   return String(s)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
-
 function formatTime(ts){
   try{
     const d=new Date(ts);
     return d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
   }catch{ return ""; }
 }
-
 function setDeviceStatus(on){
   const dot=document.getElementById("devDot");
   const txt=document.getElementById("devText");
@@ -159,143 +150,73 @@ function setDeviceStatus(on){
   txt.textContent="Device: "+(on?"Online":"Offline");
 }
 
-/* ================= LOGIN PERSISTENCE ================= */
-function saveLogin(){
-  try{
-    localStorage.setItem(LOGIN_KEY, JSON.stringify({
-      ts: Date.now()
-    }));
-  }catch(e){}
-}
-
-function clearLogin(){
-  try{ localStorage.removeItem(LOGIN_KEY); }catch(e){}
-}
-
-function loginStillValid(){
-  try{
-    const raw = localStorage.getItem(LOGIN_KEY);
-    if(!raw) return false;
-    const obj = JSON.parse(raw);
-    if(!obj || !obj.ts) return false;
-    return (Date.now() - obj.ts) < LOGIN_TTL_MS;
-  }catch(e){
-    return false;
-  }
-}
-
+/* lock */
 function unlock(){
   if(document.getElementById("pw").value!==PAGE_PASSWORD){
-    alert("Wrong password");
-    return;
+    alert("Wrong password"); return;
   }
-  saveLogin();
+  sessionStorage.setItem("dadchat_unlocked","1");
   document.getElementById("lockScreen").style.display="none";
   STATUS("Status: Connecting…");
   startMqtt();
 }
-
-if(loginStillValid()){
+if(sessionStorage.getItem("dadchat_unlocked")==="1"){
   document.getElementById("lockScreen").style.display="none";
   startMqtt();
 }
 
-/* ================= NOTIFICATIONS ================= */
-async function requestNotify(){
-  if(!("Notification" in window)){
-    alert("Notifications unsupported in this browser");
-    return;
-  }
-
-  const permission = await Notification.requestPermission();
-
-  if(permission === "granted"){
-    alert("Notifications enabled");
-  } else {
-    alert("Notifications not allowed");
-  }
-}
-
-function notify(title, body){
-  try{
-    if("Notification" in window && Notification.permission === "granted"){
-      new Notification(title, { body });
-    }
-  }catch(e){}
-}
-
-/* ================= REQUEST BANNER ================= */
-const REQ_KEY="dadchat_request_state_v4";
-
-function saveRequest(ts){
-  try{ localStorage.setItem(REQ_KEY, JSON.stringify({ts})); }catch(e){}
-}
-
-function loadRequest(){
-  try{
-    const raw=localStorage.getItem(REQ_KEY);
-    return raw ? JSON.parse(raw) : null;
-  }catch(e){ return null; }
-}
-
+/* request banner */
+const REQ_KEY="dadchat_request_state_v1";
 function showRequestBanner(ts){
-  document.getElementById("requestTimeText").textContent="Time: " + formatTime(ts);
+  document.getElementById("requestTimeText").textContent = "Time: " + formatTime(ts);
   document.getElementById("requestBanner").style.display="block";
 }
-
-function hideRequestBanner(){
-  document.getElementById("requestBanner").style.display="none";
-}
-
-function applySavedRequest(){
-  const st=loadRequest();
-  if(st && st.ts) showRequestBanner(st.ts);
-}
-
+function hideRequestBanner(){ document.getElementById("requestBanner").style.display="none"; }
+function saveRequest(ts){ try{ localStorage.setItem(REQ_KEY, JSON.stringify({ts})); }catch(e){} }
+function loadRequest(){ try{ const r=localStorage.getItem(REQ_KEY); return r?JSON.parse(r):null; }catch(e){return null;} }
+function applySavedRequest(){ const st=loadRequest(); if(st && st.ts) showRequestBanner(st.ts); }
 function dismissRequest(){
   try{ localStorage.removeItem(REQ_KEY);}catch(e){}
   hideRequestBanner();
   if(client && client.connected){
-    client.publish(topicRequest, "", {qos:1, retain:true});
+    client.publish(topicRequest,"",{qos:1,retain:true});
   }
 }
 
-/* ================= HISTORY ================= */
-const HIST_KEY="dadchat_history_cache_v2";
-let lastHistoryJson = "";
+/* history table */
+const STORE_KEY="dadchat_history_cache_v1";
 
-function cacheHistory(arr){
-  try{ localStorage.setItem(HIST_KEY, JSON.stringify(arr)); }catch(e){}
-}
-
-function loadCachedHistory(){
-  try{
-    const raw=localStorage.getItem(HIST_KEY);
-    if(!raw) return null;
-    const arr=JSON.parse(raw);
-    return Array.isArray(arr)?arr:null;
-  }catch(e){ return null; }
+function clearResponses(){
+  document.getElementById("responsesBody").innerHTML="";
+  try{ localStorage.removeItem(STORE_KEY);}catch(e){}
 }
 
 function renderHistory(arr){
   const tbody=document.getElementById("responsesBody");
   tbody.innerHTML="";
   for(const item of arr){
-    const q=item.q ?? "";
-    const a=item.a ?? "";
+    const q = item.q ?? "";
+    const a = item.a ?? "";
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${escapeHtml(q)}</td><td>${escapeHtml(a)}</td>`;
     tbody.appendChild(tr);
   }
 }
 
-function clearHistory(){
-  try{ localStorage.removeItem(HIST_KEY);}catch(e){}
-  document.getElementById("responsesBody").innerHTML="";
-  lastHistoryJson = "";
+function cacheHistory(arr){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(arr)); }catch(e){}
 }
 
-/* ================= CLEAR FIELDS ================= */
+function loadCachedHistory(){
+  try{
+    const raw=localStorage.getItem(STORE_KEY);
+    if(!raw) return null;
+    const arr=JSON.parse(raw);
+    return Array.isArray(arr)?arr:null;
+  }catch(e){ return null; }
+}
+
+/* clear fields */
 function clearFields(){
   document.getElementById("message").value="";
   document.getElementById("b1").value="";
@@ -303,42 +224,32 @@ function clearFields(){
   document.getElementById("b3").value="";
 }
 
-/* ================= MQTT ================= */
+/* mqtt */
 let client=null;
 
 function startMqtt(){
   document.getElementById("title").value="Dad Chat";
 
-  const cached=loadCachedHistory();
-  if(cached) {
-    renderHistory(cached);
-    lastHistoryJson = JSON.stringify(cached);
-  }
+  // show cached history immediately (then replace when retained arrives)
+  const cached = loadCachedHistory();
+  if(cached) renderHistory(cached);
 
   applySavedRequest();
-
-  if(typeof mqtt==="undefined"){
-    STATUS("ERROR: mqtt library did not load.");
-    return;
-  }
 
   STATUS("Connecting to HiveMQ…");
   client=mqtt.connect(brokerUrl, options);
 
   client.on("connect", ()=>{
     STATUS("Connected ✅");
-    client.subscribe(topicOnline,  {qos:1});
-    client.subscribe(topicRequest, {qos:1});
-    client.subscribe(topicHistory, {qos:1});
+    client.subscribe(topicOnline,{qos:1});
+    client.subscribe(topicRequest,{qos:1});
+    client.subscribe(topicHistory,{qos:1}); // <-- THIS is the big fix
   });
 
-  client.on("reconnect", ()=>STATUS("Reconnecting…"));
-  client.on("offline", ()=>STATUS("Offline (browser)"));
-  client.on("close", ()=>STATUS("Disconnected"));
   client.on("error", (err)=>STATUS("Error: " + (err?.message || err)));
 
   client.on("message",(topic,msg)=>{
-    const raw=msg.toString();
+    const raw = msg.toString();
 
     if(topic===topicOnline){
       setDeviceStatus(raw.trim().toLowerCase()==="online");
@@ -351,47 +262,31 @@ function startMqtt(){
         hideRequestBanner();
         return;
       }
-
       let ts=Date.now();
       try{
         const j=JSON.parse(raw);
         if(j && j.epochMs && Number(j.epochMs)>0) ts=Number(j.epochMs);
       }catch(e){}
-
       saveRequest(ts);
       showRequestBanner(ts);
-      notify("Dad Chat", "Dad requested a message");
       return;
     }
 
     if(topic===topicHistory){
+      // retained snapshot arrives here even if you were offline when replies happened
       try{
-        const arr=JSON.parse(raw);
+        const arr = JSON.parse(raw);
         if(Array.isArray(arr)){
-          const incomingJson = JSON.stringify(arr);
-
-          if(lastHistoryJson && incomingJson !== lastHistoryJson){
-            const newest = arr[0];
-            if(newest && newest.a){
-              notify("Dad Chat Response", newest.a);
-            } else {
-              notify("Dad Chat", "New response received");
-            }
-          }
-
-          lastHistoryJson = incomingJson;
           cacheHistory(arr);
           renderHistory(arr);
         }
-      }catch(e){
-        STATUS("History JSON parse error");
-      }
+      }catch(e){}
       return;
     }
   });
 }
 
-/* ================= SEND ================= */
+/* send */
 function send(){
   if(!client || !client.connected){
     STATUS("Not connected");
@@ -404,10 +299,11 @@ function send(){
   const b2=document.getElementById("b2").value || "";
   const b3=document.getElementById("b3").value || "";
 
-  client.publish(topicTitle,   title,               {qos:1, retain:true});
-  client.publish(topicMessage, msg,                 {qos:1, retain:true});
-  client.publish(topicButtons, `${b1}|${b2}|${b3}`, {qos:1, retain:true});
+  client.publish(topicTitle,   title,               {qos:1});
+  client.publish(topicMessage, msg,                 {qos:1});
+  client.publish(topicButtons, `${b1}|${b2}|${b3}`, {qos:1});
 
+  // clear request
   client.publish(topicRequest, "", {qos:1, retain:true});
   try{ localStorage.removeItem(REQ_KEY);}catch(e){}
   hideRequestBanner();
